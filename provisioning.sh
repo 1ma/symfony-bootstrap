@@ -78,12 +78,12 @@ apt-get install -y nginx
 # remove default vhost
 rm /etc/nginx/sites-enabled/default
 
-# install project vhost
+# setup project vhost
 cat << 'EOF' > /etc/nginx/sites-available/symfony
 server {
   server_name symfony.dev;
 
-  root /home/vagrant/project/web;
+  root /home/vagrant/www/web;
 
   location / {
     try_files $uri /app.php$is_args$args;
@@ -145,13 +145,13 @@ chown vagrant:vagrant /home/vagrant/.profile
 
 # add useful aliases in vagrant user's .bashrc
 cat << 'EOF' >> /home/vagrant/.bashrc
-alias console='php ~/project/app/console'
+alias console='php ~/www/app/console'
 alias my='mysql -u root -proot -D symfony'
 EOF
 chown vagrant:vagrant /home/vagrant/.bashrc
 
 
 ### Project setup
-# setup brand new Symfony 2.5 project in Vagrant shared folder
-rm /home/vagrant/project/.gitkeep
-composer create-project symfony/framework-standard-edition /home/vagrant/project "2.5.*"
+# setup brand new Symfony project in Vagrant shared folder
+rm /home/vagrant/www/.gitkeep
+composer create-project symfony/framework-standard-edition /home/vagrant/www "2.5.*"
