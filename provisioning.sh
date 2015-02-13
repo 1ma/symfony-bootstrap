@@ -13,13 +13,27 @@ echo "127.0.0.1 symfony.dev" >> /etc/hosts
 
 
 ### install miscellaneous software
-apt-get install -y python-software-properties curl tree htop git
+apt-get update -y
+apt-get install -y python-software-properties curl tree htop git nfs-common portmap
 
 
 ### register third party PPAs
-add-apt-repository ppa:ondrej/php5
+add-apt-repository ppa:git-core/ppa
 add-apt-repository ppa:nginx/stable
-apt-get update
+add-apt-repository ppa:chris-lea/node.js
+apt-get update -y
+
+
+### Frontend dev tools (npm, bower, less, uglify) and maildev installation
+apt-get install -y nodejs
+
+npm install -g bower
+npm install -g less@1.7.5
+npm install -g uglify-js
+npm install -g uglifycss
+npm install -g maildev
+echo -e "\nstart on filesystem or runlevel [2345]\nstop on run level [!2345]\nexec maildev" > /etc/init/maildev.conf
+start maildev
 
 
 ### MySQL configuration
@@ -28,20 +42,10 @@ debconf-set-selections <<< 'mysql-server-5.5 mysql-server/root_password password
 debconf-set-selections <<< 'mysql-server-5.5 mysql-server/root_password_again password root'
 apt-get install -y mysql-client mysql-server
 
-# create symfony database
-mysql -uroot -proot -e "CREATE DATABASE symfony CHARACTER SET utf8 COLLATE utf8_general_ci"
-mysql -uroot -proot -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'root' WITH GRANT OPTION; FLUSH PRIVILEGES;"
-
-# create sessions table for PDOSessionHandler
-mysql -uroot -proot -e "CREATE TABLE symfony.sessions (id VARCHAR(255) NOT NULL, value TEXT NOT NULL, time INT(11) NOT NULL, PRIMARY KEY(id)) DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci ENGINE = InnoDB;"
-
-# restart mysql
-service mysql restart
-
 
 ### PHP configuration
 # install PHP 5.5 required packages
-apt-get install -y php5-fpm php5-cli php5-intl php5-mysql php5-xdebug
+apt-get install -y php5-fpm php5-cli php5-curl php5-intl php5-mysql php5-xdebug php5-apcu
 
 # configure php.ini variables
 echo "intl.default_locale = en" >> /etc/php5/mods-available/intl.ini
@@ -55,7 +59,7 @@ ln -s /etc/php5/mods-available/short_open_tag.ini /etc/php5/cli/conf.d/00-short_
 ln -s /etc/php5/mods-available/short_open_tag.ini /etc/php5/fpm/conf.d/00-short_open_tag.ini
 
 # configure xdebug.ini
-cat << 'EOF' >> /etc/php5/fpm/conf.d/20-xdebug.ini
+cat << EOF >> /etc/php5/fpm/conf.d/20-xdebug.ini
 xdebug.remote_enable=1
 xdebug.remote_connect_back=1
 xdebug.remote_port=9000
@@ -65,6 +69,13 @@ xdebug.var_display_max_depth=20
 xdebug.show_exception_trace=0
 xdebug.max_nesting_level=250
 xdebug.remote_autostart=1
+EOF
+
+# configure apcu.ini
+cat << EOF >> /etc/php5/fpm/conf.d/20-apcu.ini
+apc.enabled=1
+apc.shm_size=32M
+apc.ttl=7200
 EOF
 
 # restart php5-fpm service
@@ -79,11 +90,11 @@ apt-get install -y nginx
 rm /etc/nginx/sites-enabled/default
 
 # setup project vhost
-cat << 'EOF' > /etc/nginx/sites-available/symfony
+cat << EOF > /etc/nginx/sites-available/symfony
 server {
   server_name symfony.dev;
 
-  root /home/vagrant/www/web;
+  root /vagrant/web;
 
   location / {
     try_files $uri /app.php$is_args$args;
@@ -110,9 +121,9 @@ service nginx restart
 
 
 ### System packages cleanup
-apt-get upgrade
-apt-get autoremove
-apt-get clean
+apt-get -y upgrade
+apt-get -y autoremove
+apt-get -y clean
 
 
 ### Composer configuration
@@ -123,12 +134,11 @@ curl -sS https://getcomposer.org/installer | php && mv composer.phar /bin/compos
 ### User configuration
 # install global command line utilies
 su -c "mkdir /home/vagrant/.composer" - vagrant
-cat << 'EOF' > /home/vagrant/.composer/composer.json
+cat << EOF > /home/vagrant/.composer/composer.json
 {
     "require": {
         "d11wtq/boris": "1.0.*",
-        "fabpot/php-cs-fixer": "@stable",
-        "phpunit/phpunit": "4.2.*"
+        "fabpot/php-cs-fixer": "@stable"
     }
 }
 EOF
@@ -137,21 +147,32 @@ chown vagrant:vagrant /home/vagrant/.composer/composer.json
 su -c "composer global update" - vagrant
 
 # add $HOME/.composer/vendor/bin to $PATH environment variable
-cat << 'EOF' >> /home/vagrant/.profile
+cat << EOF >> /home/vagrant/.profile
 export COMPOSER_VENDOR=$HOME/.composer/vendor
 export PATH=$PATH:$COMPOSER_VENDOR/bin
 EOF
 chown vagrant:vagrant /home/vagrant/.profile
 
 # add useful aliases in vagrant user's .bashrc
-cat << 'EOF' >> /home/vagrant/.bashrc
-alias console='php ~/www/app/console'
+cat << EOF >> /home/vagrant/.bashrc
+alias sf='php /vagrant/app/console'
 alias my='mysql -u root -proot -D symfony'
+alias wipedev='rm -rf /vagrant/app/cache/dev/* && time sf cache:clear --env=dev --no-warmup'
+alias wipeprod='rm -rf /vagrant/app/cache/prod/* && time sf cache:clear --env=prod --no-debug'
+
+cd /vagrant
 EOF
 chown vagrant:vagrant /home/vagrant/.bashrc
 
 
 ### Project setup
+# Symfony installer
+curl -LsS http://symfony.com/installer > /usr/bin/symfony
+chmod +x /usr/bin/symfony
+
 # setup brand new Symfony project in Vagrant shared folder
-rm /home/vagrant/www/.gitkeep
-composer create-project symfony/framework-standard-edition /home/vagrant/www "2.5.*"
+symfony new /tmp/symfony-bootstrap
+shopt -s dotglob # .hidden files wouldn't be moved otherwise
+mv /tmp/symfony-bootstrap/* /vagrant/
+shopt -u dotglob
+rm -rf /tmp/symfony-bootstrap

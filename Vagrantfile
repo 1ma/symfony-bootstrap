@@ -11,12 +11,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.ssh.forward_agent = true
 
   config.vm.synced_folder "./", "/vagrant", :nfs => true
-  config.vm.synced_folder "./www", "/home/vagrant/www", :nfs => true
-  
+
   config.vm.provider "virtualbox" do |vb|
     vb.customize ["modifyvm", :id, "--memory", "2048"]
   end
-  
+
   config.vm.provision "shell", path: "./provisioning.sh"
 
   config.vm.provider "virtualbox" do |v|
