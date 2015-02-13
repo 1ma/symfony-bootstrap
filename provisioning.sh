@@ -1,5 +1,7 @@
 #!/bin/bash
 
+PROJECT="symfony"
+
 ### System configuration
 # set box locale
 locale-gen en_US && update-locale LANG=en_US
@@ -9,7 +11,7 @@ export LANG=en_US.UTF-8
 echo "dev" > /etc/hostname
 
 # set hosts
-echo "127.0.0.1 symfony.dev" >> /etc/hosts
+echo "127.0.0.1 $PROJECT.dev" >> /etc/hosts
 
 
 ### install miscellaneous software
@@ -90,31 +92,31 @@ apt-get install -y nginx
 rm /etc/nginx/sites-enabled/default
 
 # setup project vhost
-cat << EOF > /etc/nginx/sites-available/symfony
+cat << EOF > /etc/nginx/sites-available/${PROJECT}
 server {
-  server_name symfony.dev;
+  server_name ${PROJECT}.dev;
 
   root /vagrant/web;
 
   location / {
-    try_files $uri /app.php$is_args$args;
+    try_files \$uri /app.php\$is_args\$args;
   }
 
-  location ~ ^/(app|app_dev|config)\.php(/|$) {
+  location ~ ^/(app|app_dev|config)\.php(/|\$) {
     fastcgi_pass unix:/var/run/php5-fpm.sock;
-    fastcgi_split_path_info ^(.+\.php)(/.*)$;
+    fastcgi_split_path_info ^(.+\.php)(/.*)\$;
     include fastcgi_params;
-    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
     fastcgi_param HTTPS off;
   }
 
 
-  error_log /var/log/nginx/symfony_error.log;
-  access_log /var/log/nginx/symfony_access.log;
+  error_log /var/log/nginx/${PROJECT}_error.log;
+  access_log /var/log/nginx/${PROJECT}_access.log;
 }
 EOF
 
-ln -s /etc/nginx/sites-available/symfony /etc/nginx/sites-enabled/symfony
+ln -s /etc/nginx/sites-available/${PROJECT} /etc/nginx/sites-enabled/${PROJECT}
 
 # restart nginx service
 service nginx restart
@@ -148,15 +150,15 @@ su -c "composer global update" - vagrant
 
 # add $HOME/.composer/vendor/bin to $PATH environment variable
 cat << EOF >> /home/vagrant/.profile
-export COMPOSER_VENDOR=$HOME/.composer/vendor
-export PATH=$PATH:$COMPOSER_VENDOR/bin
+export COMPOSER_VENDOR=\$HOME/.composer/vendor
+export PATH=\$PATH:\$COMPOSER_VENDOR/bin
 EOF
 chown vagrant:vagrant /home/vagrant/.profile
 
 # add useful aliases in vagrant user's .bashrc
 cat << EOF >> /home/vagrant/.bashrc
 alias sf='php /vagrant/app/console'
-alias my='mysql -u root -proot -D symfony'
+alias my='mysql -u root -proot -D ${PROJECT}'
 alias wipedev='rm -rf /vagrant/app/cache/dev/* && time sf cache:clear --env=dev --no-warmup'
 alias wipeprod='rm -rf /vagrant/app/cache/prod/* && time sf cache:clear --env=prod --no-debug'
 
@@ -165,14 +167,7 @@ EOF
 chown vagrant:vagrant /home/vagrant/.bashrc
 
 
-### Project setup
-# Symfony installer
+### Symfony installer setup
+# install command globally
 curl -LsS http://symfony.com/installer > /usr/bin/symfony
 chmod +x /usr/bin/symfony
-
-# setup brand new Symfony project in Vagrant shared folder
-symfony new /tmp/symfony-bootstrap
-shopt -s dotglob # .hidden files wouldn't be moved otherwise
-mv /tmp/symfony-bootstrap/* /vagrant/
-shopt -u dotglob
-rm -rf /tmp/symfony-bootstrap
