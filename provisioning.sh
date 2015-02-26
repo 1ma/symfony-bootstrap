@@ -44,6 +44,12 @@ debconf-set-selections <<< 'mysql-server-5.5 mysql-server/root_password password
 debconf-set-selections <<< 'mysql-server-5.5 mysql-server/root_password_again password root'
 apt-get install -y mysql-client mysql-server
 
+# enforce DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci ENGINE = InnoDB;
+sed -i 's/\[client\]/\[client\]\ndefault-character-set = utf8/' /etc/mysql/my.cnf
+sed -i 's/\[mysqld\]/\[mysqld\]\ncollation-server = utf8_unicode_ci\ncharacter-set-server = utf8/' /etc/mysql/my.cnf
+
+service mysql restart
+
 
 ### PHP configuration
 # install PHP 5.5 required packages
